@@ -4,12 +4,14 @@
 
 # import the necessary packages
 from collections import deque
-from imutils.video import VideoStream
 import numpy as np
 import argparse
-import cv2
 import imutils
+import cv2
 import time
+import pandas as pd
+import matplotlib.pyplot as plt
+
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -19,76 +21,101 @@ ap.add_argument("-b", "--buffer", type=int, default=64,
 	help="max buffer size")
 args = vars(ap.parse_args())
 
-# define which color is being tracked
-
-color = "red"
-
-if color == "red":
-	H_lower = 0
-	S_lower = 114
-	V_lower = 6
-	H_upper = 225
-	S_upper = 255
-	V_upper = 255
-
-if color == "green":
-	H_lower = 0
-	S_lower = 114
-	V_lower = 6
-	H_upper = 35
-	S_upper = 255
-	V_upper = 255
-
-# define the lower and upper boundaries of the color
+# define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-Lower = (H_lower, S_lower, V_lower)
-Upper = (H_upper, S_upper, V_upper)
+greenLower = (29, 86, 6)
+greenUpper = (64, 255, 255)
 pts = deque(maxlen=args["buffer"])
+
+isNvidia = True
+
+# Get a reference to webcam #0 (the default one)
+def gstreamer_pipeline(
+		capture_width=3280,
+		capture_height=2464,
+		display_width=820,
+		display_height=616,
+		framerate=15,
+		flip_method=2,
+):
+	return (
+			"nvarguscamerasrc ! "
+			"video/x-raw(memory:NVMM), "
+			"width=(int)%d, height=(int)%d, "
+			"format=(string)NV12, framerate=(fraction)%d/1 ! "
+			"nvvidconv flip-method=%d ! "
+			"video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
+			"videoconvert ! "
+			"video/x-raw, format=(string)BGR ! appsink"
+			% (
+				capture_width,
+				capture_height,
+				framerate,
+				flip_method,
+				display_width,
+				display_height,
+			)
+	)
+
 
 # if a video path was not supplied, grab the reference
 # to the webcam
 if not args.get("video", False):
-	vs = VideoStream(src=0).start()
+
+	# To flip the image, modify the flip_method parameter (0 and 2 are the most common
+	if isNvidia:
+		camera = cv2.VideoCapture(gstreamer_pipeline(), cv2.CAP_GSTREAMER)
+	else:
+		camera = cv2.VideoCapture(0)
 
 # otherwise, grab a reference to the video file
 else:
-	vs = cv2.VideoCapture(args["video"])
+	camera = cv2.VideoCapture(args["video"])
 
-# allow the camera or video file to warm up
-time.sleep(2.0)
+#Creating a Pandas DataFrame To Store Data Point
+Data_Features = ['x', 'y', 'time']
+Data_Points = pd.DataFrame(data = None, columns = Data_Features , dtype = float)
+
+
+#Reading the time in the begining of the video.
+start = time.time()
 
 # keep looping
 while True:
 	# grab the current frame
-	frame = vs.read()
 
-	# handle the frame from VideoCapture or VideoStream
-	frame = frame[1] if args.get("video", False) else frame
+	(grabbed, frame) = camera.read()
+	
+	#Reading The Current Time
+	current_time = time.time() - start
 
 	# if we are viewing a video and we did not grab a frame,
 	# then we have reached the end of the video
-	if frame is None:
+	if args.get("video") and not grabbed:
+
 		break
 
 	# resize the frame, blur it, and convert it to the HSV
 	# color space
-	frame = imutils.resize(frame, width=600)
-	blurred = cv2.GaussianBlur(frame, (11, 11), 0)
-	hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-	# construct a mask for the color, then perform
+	frame = imutils.resize(frame, width=1800)
+	# blurred = cv2.GaussianBlur(frame, (11, 11), 0)
+	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+	# construct a mask for the color "green", then perform
 	# a series of dilations and erosions to remove any small
 	# blobs left in the mask
-	mask = cv2.inRange(hsv, Lower, Upper)
+	mask = cv2.inRange(hsv, greenLower, greenUpper)
+
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 
 	# find contours in the mask and initialize the current
 	# (x, y) center of the ball
 	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-		cv2.CHAIN_APPROX_SIMPLE)
-	cnts = imutils.grab_contours(cnts)
+		cv2.CHAIN_APPROX_SIMPLE)[-2]
+
 	center = None
 
 	# only proceed if at least one contour was found
@@ -100,14 +127,21 @@ while True:
 		((x, y), radius) = cv2.minEnclosingCircle(c)
 		M = cv2.moments(c)
 		center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+		
 
 		# only proceed if the radius meets a minimum size
-		if radius > 10:
+		if (radius < 300) & (radius > 10 ) : 
+
 			# draw the circle and centroid on the frame,
 			# then update the list of tracked points
 			cv2.circle(frame, (int(x), int(y)), int(radius),
 				(0, 255, 255), 2)
 			cv2.circle(frame, center, 5, (0, 0, 255), -1)
+
+			
+			#Save The Data Points
+			Data_Points.loc[Data_Points.size/3] = [x , y, current_time]
+
 
 	# update the points queue
 	pts.appendleft(center)
@@ -131,14 +165,37 @@ while True:
 	# if the 'q' key is pressed, stop the loop
 	if key == ord("q"):
 		break
+    
 
-# if we are not using a video file, stop the camera video stream
-if not args.get("video", False):
-	vs.stop()
+#'h' is the focal length of the camera
+#'X0' is the correction term of shifting of x-axis
+#'Y0' is the correction term ofshifting of y-axis
+#'time0' is the correction term for correction of starting of time
+h = 0.2
+X0 = -3
+Y0 = 20
+time0 = 0
+theta0 = 0.3
 
-# otherwise, release the camera
-else:
-	vs.release()
+#Applying the correction terms to obtain actual experimental data
+Data_Points['x'] = Data_Points['x']- X0
+Data_Points['y'] = Data_Points['y'] - Y0
+Data_Points['time'] = Data_Points['time'] - time0
 
-# close all windows
+#Calulataion of theta value
+Data_Points['theta'] = 2 * np.arctan(Data_Points['y']*0.0000762/h)#the factor correspons to pixel length in real life
+Data_Points['theta'] = Data_Points['theta'] - theta0
+
+#Creating the 'Theta' vs 'Time' plot
+plt.plot(Data_Points['theta'], Data_Points['time'])
+plt.xlabel('Theta')
+plt.ylabel('Time')
+
+#Export The Data Points As cvs File and plot
+Data_Points.to_csv('Data_Set.csv', sep=",")
+plt.savefig('Time_vs_Theta_Graph.svg', transparent= True)
+
+# cleanup the camera and close any open windows
+camera.release()
+
 cv2.destroyAllWindows()
