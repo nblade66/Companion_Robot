@@ -1,3 +1,7 @@
+# USAGE
+# python ball_tracking.py --video ball_tracking_example.mp4
+# python ball_tracking.py
+
 # import the necessary packages
 from collections import deque
 import numpy as np
@@ -80,6 +84,7 @@ start = time.time()
 # keep looping
 while True:
 	# grab the current frame
+
 	(grabbed, frame) = camera.read()
 	
 	#Reading The Current Time
@@ -88,10 +93,12 @@ while True:
 	# if we are viewing a video and we did not grab a frame,
 	# then we have reached the end of the video
 	if args.get("video") and not grabbed:
+
 		break
 
 	# resize the frame, blur it, and convert it to the HSV
 	# color space
+
 	frame = imutils.resize(frame, width=1800)
 	# blurred = cv2.GaussianBlur(frame, (11, 11), 0)
 	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -100,6 +107,7 @@ while True:
 	# a series of dilations and erosions to remove any small
 	# blobs left in the mask
 	mask = cv2.inRange(hsv, greenLower, greenUpper)
+
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 
@@ -107,6 +115,7 @@ while True:
 	# (x, y) center of the ball
 	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
 		cv2.CHAIN_APPROX_SIMPLE)[-2]
+
 	center = None
 
 	# only proceed if at least one contour was found
@@ -122,14 +131,17 @@ while True:
 
 		# only proceed if the radius meets a minimum size
 		if (radius < 300) & (radius > 10 ) : 
+
 			# draw the circle and centroid on the frame,
 			# then update the list of tracked points
 			cv2.circle(frame, (int(x), int(y)), int(radius),
 				(0, 255, 255), 2)
 			cv2.circle(frame, center, 5, (0, 0, 255), -1)
+
 			
 			#Save The Data Points
 			Data_Points.loc[Data_Points.size/3] = [x , y, current_time]
+
 
 	# update the points queue
 	pts.appendleft(center)
@@ -153,6 +165,7 @@ while True:
 	# if the 'q' key is pressed, stop the loop
 	if key == ord("q"):
 		break
+    
 
 #'h' is the focal length of the camera
 #'X0' is the correction term of shifting of x-axis
@@ -184,4 +197,5 @@ plt.savefig('Time_vs_Theta_Graph.svg', transparent= True)
 
 # cleanup the camera and close any open windows
 camera.release()
+
 cv2.destroyAllWindows()
