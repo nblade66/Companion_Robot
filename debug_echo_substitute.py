@@ -24,7 +24,7 @@ def right():
 
 
 def follow_me():
-    follow_thread = Thread(target=driver.follow_thread)
+    follow_thread = Thread(target=driver.follow_thread, name="following_thread")
     follow_thread.start()
     threads.append(follow_thread)
 
@@ -39,7 +39,7 @@ def dance():
 
 if __name__ == '__main__':
     print("starting...")
-    cam_thread = Thread(target=camera.camera_thread, name="following_thread")
+    cam_thread = Thread(target=camera.camera_thread)
     # face_rec_thread = Thread(target=face_rec.facerec_thread)
     # face_rec_thread.start()
     # threads.append(face_rec_thread)
@@ -59,7 +59,7 @@ if __name__ == '__main__':
             elif command == 'stop following':
                 driver.event.set()
                 for i in range(len(threads)):
-                    if threads[i].name == "following thread":
+                    if threads[i].name == "following_thread":
                         threads.pop(i).join()
             elif command == 'stop all':
                 driver.event.set()
