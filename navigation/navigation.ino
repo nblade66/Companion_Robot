@@ -60,9 +60,13 @@ long leftDistance = 0, centerDistance = 0, rightDistance = 0;
 int calibration_count = 0;
 int error = 0;
 int kp = 50;
-int rightTicks = 0;
-int leftTicks = 0;
-int distanceTicks = 0;
+unsigned int rightTicks = 0;
+unsigned int leftTicks = 0;
+unsigned int distanceTicks = 0;
+int precision = 5; // in centimeters; DO NOT CHANGE FOR NOW, Serial Messaging to include precision is not implemented
+const int cm2ticks = 80;
+const int units2deg = 3;
+const int deg2ticks = 21; // TODO needs calibration
 
 // Variables for Commands
 int q_size = 31;
@@ -82,7 +86,21 @@ void setup() {
 }
 
 void loop() {
-  acceptCommand();
+  // Accept a Command from Serial
+  while (Serial.available() > 0) {
+    command = Serial.read();
+    bool isSystemCommand = command >> 4 == 1;
+    if (isSystemCommand) {
+      processCommand(command);
+      break;
+    } else if (mode == distance) {
+      q.push(&command);
+    } else {
+      isExecuting = true; // command does not go to Queue; processes immediately
+      break;
+    }
+  }
+
   switch (mode) {
     case calibration:
       calibrate_motors();
@@ -103,38 +121,14 @@ void loop() {
   }
 
   // Code to stop the robot if obstacle is detected goes here, since it will prevent any inputs from running until the obstacle is not detected
-  centerDistance = centerUltrasound.getDistance();
-  if (centerDistance <= STOP_DISTANCE_CENTER) {   // This means sometimes it will halt while turning in place, but... eh, I'll figure that out later
-    updateDir(halt);
-    respondToCurrDir();
+  if (isDanger()) {
     isExecuting = false;
-    
-//    if (mode != waiting) {
-//      Serial.write(generateDistSerial(true, 0));
-//    }
-//    mode = waiting; // This is to prevent any shenanigans
   }
+
   if (isExecuting) {
     // Serial.write(command);
     processCommand(command);
     isExecuting = false;
-  }
-}
-
-// Accept Command. Read serial; add command to queue if in Distance Mode and the instructions is not a System Instruction
-void acceptCommand() {
-  while (Serial.available() > 0) {
-    command = Serial.read();
-    bool isSystemCommand = command >> 4 == 1;
-    if (isSystemCommand) {
-      processCommand(command);
-      break;
-    } else if (mode == distance) {
-      q.push(&command);
-    } else {
-      isExecuting = true; // command does not go to Queue; processes immediately
-      break;
-    }
   }
 }
 
@@ -237,10 +231,12 @@ void processCommand(byte command) {
       switch (command >> 6) {
         case 0: //backwards
           commandValue = command & B00011111;
+          // For the most part, I'd rather not go backwards
 
           break;
         case 1: //left
           commandValue = command & B00111111;
+          
 
 
           break;
@@ -251,7 +247,7 @@ void processCommand(byte command) {
           break;
         case 3: //forward
           commandValue = command & B00111111;
-          //go_distance(....);
+          go_distance(commandValue, forward);
 
           break;
 
@@ -266,10 +262,32 @@ void processCommand(byte command) {
 // TODO: Write to Serial: the distance traveled and if there was an obstacle
 // Takes a centimeter input and outputs a distance tick count
 // About 80 encoder ticks per centimeter
-int go_distance(int distance) {
-  go_forward();
+// For rotation, each unit = 3 degrees, with a maximum turn of 180 degrees for each direction.
+int go_distance(byte unitDistance, Directions dir) {
+  byte distance = (dir == forward) ? unitDistance * precision : unitDistance * units2deg;
+  bool obstacle = false;
+  unsigned int tick_target = (dir == forward) ? distance * cm2ticks : distance * deg2ticks;
   distanceTicks = 0;
-  updateDir(forward);
+  updateDir(dir);
+  respondToCurrDir();
+  while (distanceTicks < tick_target) {
+    // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
+    if (isDanger()) {
+      obstacle = true;
+      break;
+    }
+    
+    // break if the distanceTicks stops updating (this means something is wrong)
+  }
+  updateDir(halt);
+  respondToCurrDir();
+
+  // Send message back to Nvidia indicating distance traveled and if obstacle was encountered
+  byte unitsTraveled = (dir == forward) ? distanceTicks / (cm2ticks * precision) : distanceTicks / (deg2ticks * units2deg);
+  byte msg = generateDistSerial(obstacle, unitsTraveled);
+
+  return unitsTraveled;
+
 
 }
 
@@ -416,14 +434,31 @@ byte generateStateSerial() {
 // bit 2 ->  obstacle or not (0 is no obstacle; 1 is obstacle)
 //      In calibration mode; no obstacle = success
 // bit 3-8 ->  Distance (TODO: Not implemented yet, since it involves more coding)
-byte generateDistSerial(bool detectedObstacle, byte dist_traveled) {
+byte generateDistSerial(bool detectedObstacle, byte unitsTraveled) {
   byte msg = B01111111;
   if (!detectedObstacle) {
     msg = msg & B10111111;
   }
 
+  byte unitMsg = B11000000 | unitsTraveled;
+  msg = msg & unitMsg;
+
   return msg;
 
+}
+
+
+
+
+
+bool isDanger() {
+  centerDistance = centerUltrasound.getDistance();
+  if (centerDistance <= STOP_DISTANCE_CENTER) {   // This means sometimes it will halt while turning in place, but... eh, I'll figure that out later
+    updateDir(halt);
+    respondToCurrDir();
+    return true;
+  }
+  return false;
 }
 
 void updateDir(Directions newDir) {
