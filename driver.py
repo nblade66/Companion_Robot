@@ -6,7 +6,6 @@ from binascii import hexlify
 import camera
 
 
-
 # TODO function to convert string to Serial Code for better user experience
 
 isWindowsOS = False
@@ -30,26 +29,10 @@ time.sleep(5)
 ser.flushInput()
 
 shared_arr = [0]
-event = Event()
+follow_event = Event()
 
 
-def thread_modify():
-    while True:
-        if event.is_set():
-            break
-        shared_arr[0] += 1
-        time.sleep(1)
-
-
-def thread_read():
-    while True:
-        if event.is_set():
-            break
-        print(f"shared data: {shared_arr}")
-        time.sleep(1)
-
-
-def forward():
+def forward_test():
     print("Enter following mode")
     ser.write(b'\x02')
     time.sleep(2)
@@ -103,6 +86,35 @@ def calibrate():
             break
 
 
+def forward_distance(distance):
+
+
+# TODO Add system commands
+def change_mode(command):
+    if command == 'distance':
+        ser.write(b'\x01')
+    elif command == 'following':
+        ser.write(b'\x02')
+    elif command == 'calibration':
+        ser.write(b'\x03')
+    elif command == 'waiting':
+        ser.write(b'\x00')
+
+# TODO add backwards
+# TODO Add following commands
+# value argument is an integer the represents units of movement
+# For distance, 1 unit = 5 cm. For turning, 1 unit = 3 degrees
+# We directly send the unit value over to the Arduino
+# Max unit value is 63 (for backward command, it's 31)
+def go(command, value=None):
+    if command == 'forward':
+        ser.write(bytes([b'\xC0'[0] | value]))
+    elif command == 'right':
+        ser.write(bytes([b'\x80'[0] | value]))
+    elif command == 'left':
+        ser.write(bytes([b'\x40'[0] | value]))
+
+
 # TODO Modify the code to account for target being on the outer edges of the camera (variable speeds)
 # TODO make the code more robust so that if the target disappears for a few frames,
 #   the robot doesn't just stop and start searching immediately.
@@ -111,14 +123,14 @@ def follow_thread():
     margin = 30
     left_threshold = video_width / 3 + margin
     right_threshold = video_width / 3 * 2 - margin
-    event.clear()
+    follow_event.clear()
     ser.write(b'\x02')          # Set robot to Following Mode
     while True:
         if ser.in_waiting > 0:  # At the moment, Arduino does not send message to Nvidia
             if ser.read(1) == b'\x7f':
                 print("Robot arrived")
                 break
-        if event.is_set():
+        if follow_event.is_set():
             break
 
         if camera.currX == -1:    # No target to follow is detected
@@ -145,7 +157,7 @@ if __name__ == "__main__":
     print("starting...")
     time.sleep(10)
     print("Going Forward")
-    forward()
+    forward_test()
     print("Entering Nav Test")
     nav_test()
     print("Calibrating")
