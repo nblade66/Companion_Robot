@@ -9,13 +9,15 @@ import camera
 # TODO function to convert string to Serial Code for better user experience
 
 isWindowsOS = False
+serialConnected = False
 
 if isWindowsOS:
     port = 'COM5'
 else:
     port = '/dev/ttyUSB0'
 
-ser = serial.Serial(port=port, baudrate=9600, timeout=1)
+if serialConnected:
+    ser = serial.Serial(port=port, baudrate=9600, timeout=1)
 
 class Node:
     def __init__(self):
@@ -23,72 +25,92 @@ class Node:
         self.is_obstacle = False
 
 startNode = Node()
+startNode.is_visited = True
 startNode.isVisited = True
 
 class AVMap:
     def __init__(self):
-        self.map = [[startNode]]    # This should be a 2D list of Node objects; each Node represents a 5x5cm square
+        # Map should be a 2D list of Node objects; each Node represents a 5x5cm square
+        # The nested lists are the rows; the coordinates are (x,y), it means self.map[y][x]
+        self.map = [[startNode]]
         self.start = [0, 0]
         self.currPosition = [0, 0]
+        self.direction = 0      # Angle in degrees, 0 is right, 90 is up, 180 is left, 270 is down
 
     def clear_map(self):
         self.map = [[startNode]]
         self.start = [0, 0]
         self.currPosition = [0, 0]
 
-    # Accepts coordinate values
+    # Accepts the endpoint's coordinate value
     def update_map(self, end, obstacle=False):
         # Only implemented for Manhattan Movement for now
         a = self.currPosition[0]
         b = self.currPosition[1]
-        x = end[0]
-        y = end[1]
+        x = end[0] + self.start[0]
+        y = end[1] + self.start[1]
         if a < x and b == y:
+            self.direction = 0
             for i in range(1, x - a + 1):
-                if a + i >= len(self.map[1]):
+                if a + i >= len(self.map[0]):
                     self.append_col()
                 self.currPosition[0] += 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+            if obstacle:
+                if self.currPosition[0] + 1 >= len(self.map[0]):
+                    self.append_col()
+                self.map[self.currPosition[1]][self.currPosition[0] + 1].is_obstacle = True
 
         elif a > x and b == y:  # when robot is moving left
+            self.direction = 180
             for i in range(1, a - x + 1):
                 if a - i < 0:   # when robot gets to negative coordinates, we shift the whole array right
                     self.prepend_col()
                     a += 1
-                    self.currPosition[0] += 1
-                    self.start[0] += 1
                 self.currPosition[0] -= 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+            if obstacle:
+                if self.currPosition[0] - 1 < 0:
+                    self.prepend_col()
+                self.map[self.currPosition[1]][self.currPosition[0] - 1].is_obstacle = True
 
         elif a == x and b < y:
+            self.direction = 270
             for i in range(1, y - b + 1):
                 if a + i >= len(self.map):
                     self.append_row()
                 self.currPosition[1] += 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+            if obstacle:
+                if self.currPosition[1] + 1 >= len(self.map):
+                    self.append_row()
+                self.map[self.currPosition[1] + 1][self.currPosition[0]].is_obstacle = True
 
         elif a == x and b > y:  # when the robot is moving up
+            self.direction = 90
             for i in range(1, b - y + 1):
                 if b - i < 0:   # when robot gets to negative coordinates, we shift the whole array down
                     self.prepend_row()
                     b += 1
-                    self.currPosition[1] += 1
-                    self.start[1] += 1
-                self.currPosition[0] -= 1
+                self.currPosition[1] -= 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+            if obstacle:
+                if self.currPosition[1] - 1 < 0:
+                    self.prepend_row()
+                self.map[self.currPosition[1] - 1][self.currPosition[0]].is_obstacle = True
 
-        if obstacle:
-            self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = True
 
     def append_col(self):
         for row in self.map:
             row.append(Node())
 
     def prepend_col(self):
+        self.currPosition[0] += 1
+        self.start[0] += 1
         for row in self.map:
             row.insert(0, Node())
 
@@ -99,35 +121,53 @@ class AVMap:
         self.map.append(new_row)
 
     def prepend_row(self):
+        self.currPosition[1] += 1
+        self.start[1] += 1
         new_row = []
         for _ in self.map[0]:
             new_row.append(Node())
         self.map.insert(0, new_row)
 
+    def serial2endpoint(self):
+        None
+
     def print_map(self):
-        for row in self.map:
-            for element in row:
-                if element.is_obstacle:
+        for y, row in enumerate(self.map):
+            for x, element in enumerate(row):
+                if self.currPosition[0] == x and self.currPosition[1] == y:
+                    if self.direction == 0:
+                        dir_symbol = '>'
+                    elif self.direction == 90:
+                        dir_symbol = '^'
+                    elif self.direction == 180:
+                        dir_symbol = '<'
+                    else:
+                        dir_symbol = 'v'
+                    print(dir_symbol, end=' ')
+                elif self.start[0] == x and self.start[1] == y:
+                    print('+', end=' ')
+                elif element.is_obstacle:
                     print('x', end=' ')
                 elif element.is_visited:
-                    print('#', end=' ')
-                else:
                     print('o', end=' ')
+                else:
+                    print('.', end=' ')
             print()
 
 
-avMap = AVMap() # Stores the grid of the room
+avMap = AVMap()     # Stores the grid of the room
 
 # Wait for Arduino to connect
-while True:
-    if ser.in_waiting > 0:
-        msg = ser.read(1)
-        if msg == b'\xFF':
-            print("Arduino connected")
-            break
-time.sleep(5)
+if serialConnected:
+    while True:
+        if ser.in_waiting > 0:
+            msg = ser.read(1)
+            if msg == b'\xFF':
+                print("Arduino connected")
+                break
+    time.sleep(5)
 
-ser.flushInput()
+    ser.flushInput()
 
 shared_arr = [0]
 follow_event = Event()
@@ -189,7 +229,7 @@ def calibrate():
 
 
 # TODO  1) Sets Arduino mode to 'distance'
-#       2) Sends Arduino a distance command based on roaming algorithm
+#       2) Sends Arduino a distance command based on roaming algorithm (let's say... move to closest non-visited spot)
 #       3) Waits for Arduino to send a serial message back indicating distance and whether obstacle is detected
 #       4) Update the path map
 #       5) Plot an image of the map for debugging purposes
@@ -197,10 +237,34 @@ def calibrate():
 #       How do I turn saved paths (which are lines) into a "known area"?
 def roam_thread():
     roam_event.clear()
+    avMap.update_map((0, 1))
+    avMap.print_map()
+    print()
+    avMap.update_map((10, 1))
+    avMap.print_map()
+    print()
+    avMap.update_map((10, -5), obstacle=True)
+    avMap.print_map()
+    print()
+    avMap.update_map((-3, -5), obstacle=True)
+    avMap.print_map()
+    print()
+    avMap.update_map((-3, 3), obstacle=True)
+    avMap.print_map()
+    print()
+    avMap.update_map((-4, 3), obstacle=True)
+    avMap.print_map()
+    print()
+    avMap.update_map((-4, -2), obstacle=True)
+    avMap.print_map()
+    print()
+    avMap.clear_map()
+
 
 
 # TODO Create navigate_thread() function that makes the robot navigate to a point in the room based on the obstacle map
 #   This should use a pathfinding algorithm (see pathfinding tutorial)
+#   So basically, it finds the shortest path, then if it encounters an obstacle, it refinds the shortest path
 #   Note: This function should still update the path map when obstacles are encountered
 
 # TODO Create an obstacle avoidance function that navigates around an obstacle based on the path map
