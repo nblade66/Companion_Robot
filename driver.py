@@ -17,6 +17,107 @@ else:
 
 ser = serial.Serial(port=port, baudrate=9600, timeout=1)
 
+class Node:
+    def __init__(self):
+        self.is_visited = False
+        self.is_obstacle = False
+
+startNode = Node()
+startNode.isVisited = True
+
+class AVMap:
+    def __init__(self):
+        self.map = [[startNode]]    # This should be a 2D list of Node objects; each Node represents a 5x5cm square
+        self.start = [0, 0]
+        self.currPosition = [0, 0]
+
+    def clear_map(self):
+        self.map = [[startNode]]
+        self.start = [0, 0]
+        self.currPosition = [0, 0]
+
+    # Accepts coordinate values
+    def update_map(self, end, obstacle=False):
+        # Only implemented for Manhattan Movement for now
+        a = self.currPosition[0]
+        b = self.currPosition[1]
+        x = end[0]
+        y = end[1]
+        if a < x and b == y:
+            for i in range(1, x - a + 1):
+                if a + i >= len(self.map[1]):
+                    self.append_col()
+                self.currPosition[0] += 1
+                self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
+                self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+
+        elif a > x and b == y:  # when robot is moving left
+            for i in range(1, a - x + 1):
+                if a - i < 0:   # when robot gets to negative coordinates, we shift the whole array right
+                    self.prepend_col()
+                    a += 1
+                    self.currPosition[0] += 1
+                    self.start[0] += 1
+                self.currPosition[0] -= 1
+                self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
+                self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+
+        elif a == x and b < y:
+            for i in range(1, y - b + 1):
+                if a + i >= len(self.map):
+                    self.append_row()
+                self.currPosition[1] += 1
+                self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
+                self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+
+        elif a == x and b > y:  # when the robot is moving up
+            for i in range(1, b - y + 1):
+                if b - i < 0:   # when robot gets to negative coordinates, we shift the whole array down
+                    self.prepend_row()
+                    b += 1
+                    self.currPosition[1] += 1
+                    self.start[1] += 1
+                self.currPosition[0] -= 1
+                self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
+                self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
+
+        if obstacle:
+            self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = True
+
+    def append_col(self):
+        for row in self.map:
+            row.append(Node())
+
+    def prepend_col(self):
+        for row in self.map:
+            row.insert(0, Node())
+
+    def append_row(self):
+        new_row = []
+        for _ in self.map[0]:
+            new_row.append(Node())
+        self.map.append(new_row)
+
+    def prepend_row(self):
+        new_row = []
+        for _ in self.map[0]:
+            new_row.append(Node())
+        self.map.insert(0, new_row)
+
+    def print_map(self):
+        for row in self.map:
+            for element in row:
+                if element.is_obstacle:
+                    print('x', end=' ')
+                elif element.is_visited:
+                    print('#', end=' ')
+                else:
+                    print('o', end=' ')
+            print()
+
+
+avMap = AVMap() # Stores the grid of the room
+
 # Wait for Arduino to connect
 while True:
     if ser.in_waiting > 0:
@@ -30,6 +131,7 @@ ser.flushInput()
 
 shared_arr = [0]
 follow_event = Event()
+roam_event = Event()
 
 
 def forward_test():
@@ -37,7 +139,7 @@ def forward_test():
     ser.write(b'\x02')
     time.sleep(2)
 
-    print("Go Foward...")
+    print("Go Forward...")
     ser.write(b'\xC0')
     time.sleep(5)
     print("Stopping")
@@ -86,7 +188,23 @@ def calibrate():
             break
 
 
-def forward_distance(distance):
+# TODO  1) Sets Arduino mode to 'distance'
+#       2) Sends Arduino a distance command based on roaming algorithm
+#       3) Waits for Arduino to send a serial message back indicating distance and whether obstacle is detected
+#       4) Update the path map
+#       5) Plot an image of the map for debugging purposes
+#       6) Repeat 2-5 based on the roaming algorithm
+#       How do I turn saved paths (which are lines) into a "known area"?
+def roam_thread():
+    roam_event.clear()
+
+
+# TODO Create navigate_thread() function that makes the robot navigate to a point in the room based on the obstacle map
+#   This should use a pathfinding algorithm (see pathfinding tutorial)
+#   Note: This function should still update the path map when obstacles are encountered
+
+# TODO Create an obstacle avoidance function that navigates around an obstacle based on the path map
+#   Note: This function should still update the path map when obstacles are encountered
 
 
 # TODO Add system commands
