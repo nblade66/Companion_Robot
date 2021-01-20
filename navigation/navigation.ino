@@ -236,12 +236,14 @@ void processCommand(byte command) {
           break;
         case 1: //left
           commandValue = command & B00111111;
+          go_distance(commandValue, left);
           
 
 
           break;
         case 2: //right
           commandValue = command & B00111111;
+          go_distance(commandValue, right);
 
 
           break;
@@ -272,7 +274,7 @@ int go_distance(byte unitDistance, Directions dir) {
   respondToCurrDir();
   while (distanceTicks < tick_target) {
     // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
-    if (isDanger()) {
+    if (dir == forward && isDanger()) {
       obstacle = true;
       break;
     }
@@ -281,6 +283,13 @@ int go_distance(byte unitDistance, Directions dir) {
   }
   updateDir(halt);
   respondToCurrDir();
+
+  // Check for danger at the end of the maneuver when turning
+  if (dir == left || dir == right) {
+    if (isDanger()) {
+      obstacle = true;
+    }
+  }
 
   // Send message back to Nvidia indicating distance traveled and if obstacle was encountered
   byte unitsTraveled = (dir == forward) ? distanceTicks / (cm2ticks * precision) : distanceTicks / (deg2ticks * units2deg);

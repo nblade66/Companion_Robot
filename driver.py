@@ -24,9 +24,10 @@ class Node:
         self.is_visited = False
         self.is_obstacle = False
 
+
 startNode = Node()
 startNode.is_visited = True
-startNode.isVisited = True
+
 
 class AVMap:
     def __init__(self):
@@ -41,10 +42,15 @@ class AVMap:
         self.map = [[startNode]]
         self.start = [0, 0]
         self.currPosition = [0, 0]
+        self.direction = 0
 
-    # Accepts the endpoint's coordinate value
-    def update_map(self, end, obstacle=False):
+    # Accepts the serial message received from Arduino
+    # The endpoint it uses in the code is the cartesian coordinate endpoint. The currPosition is in array coordinates.
+    # In the function, the endpoint is adjusted to be in array coordinates by adding the array coordinates of the
+    # Start point (the origin)
+    def update_map(self, serial_byte):
         # Only implemented for Manhattan Movement for now
+        end, obstacle = self.serial2endpoint(serial_byte)
         a = self.currPosition[0]
         b = self.currPosition[1]
         x = end[0] + self.start[0]
@@ -57,10 +63,6 @@ class AVMap:
                 self.currPosition[0] += 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
-            if obstacle:
-                if self.currPosition[0] + 1 >= len(self.map[0]):
-                    self.append_col()
-                self.map[self.currPosition[1]][self.currPosition[0] + 1].is_obstacle = True
 
         elif a > x and b == y:  # when robot is moving left
             self.direction = 180
@@ -71,10 +73,6 @@ class AVMap:
                 self.currPosition[0] -= 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
-            if obstacle:
-                if self.currPosition[0] - 1 < 0:
-                    self.prepend_col()
-                self.map[self.currPosition[1]][self.currPosition[0] - 1].is_obstacle = True
 
         elif a == x and b < y:
             self.direction = 270
@@ -84,10 +82,6 @@ class AVMap:
                 self.currPosition[1] += 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
-            if obstacle:
-                if self.currPosition[1] + 1 >= len(self.map):
-                    self.append_row()
-                self.map[self.currPosition[1] + 1][self.currPosition[0]].is_obstacle = True
 
         elif a == x and b > y:  # when the robot is moving up
             self.direction = 90
@@ -98,11 +92,7 @@ class AVMap:
                 self.currPosition[1] -= 1
                 self.map[self.currPosition[1]][self.currPosition[0]].is_visited = True
                 self.map[self.currPosition[1]][self.currPosition[0]].is_obstacle = False
-            if obstacle:
-                if self.currPosition[1] - 1 < 0:
-                    self.prepend_row()
-                self.map[self.currPosition[1] - 1][self.currPosition[0]].is_obstacle = True
-
+        self.add_obstacle(obstacle)
 
     def append_col(self):
         for row in self.map:
@@ -128,8 +118,79 @@ class AVMap:
             new_row.append(Node())
         self.map.insert(0, new_row)
 
-    def serial2endpoint(self):
-        None
+    def add_obstacle(self, obstacle):
+        if obstacle:
+            if self.direction == 0:
+                if self.currPosition[0] + 1 >= len(self.map[0]):
+                    self.append_col()
+                self.map[self.currPosition[1]][self.currPosition[0] + 1].is_obstacle = True
+
+            elif self.direction == 180:
+                if self.currPosition[0] - 1 < 0:
+                    self.prepend_col()
+                self.map[self.currPosition[1]][self.currPosition[0] - 1].is_obstacle = True
+
+            elif self.direction == 270:
+                if self.currPosition[1] + 1 >= len(self.map):
+                    self.append_row()
+                self.map[self.currPosition[1] + 1][self.currPosition[0]].is_obstacle = True
+
+            elif self.direction == 90:
+                if self.currPosition[1] - 1 < 0:
+                    self.prepend_row()
+                self.map[self.currPosition[1] - 1][self.currPosition[0]].is_obstacle = True
+
+    # All endpoints are relative to the origin coordinates (start position), so start is always in the (0,0) position
+    # even if the actual array coordinates are not
+    def serial2endpoint(self, serial_byte):
+        _, has_obstacle, value = parse_serial(serial_byte)
+        # I could use trig functions here, but eh, maybe later
+        endpoint = (self.currPosition[0] - self.start[0], self.currPosition[1] - self.start[1])
+        if self.direction == 0:     # Facing to the right
+            endpoint = (endpoint[0] + value, endpoint[1])
+        elif self.direction == 90:
+            endpoint = (endpoint[0], endpoint[1] - value)
+        elif self.direction == 180:
+            endpoint = (endpoint[0] - value, endpoint[1])
+        elif self.direction == 270:
+            endpoint = (endpoint[0], endpoint[1] + value)
+
+        return endpoint, has_obstacle
+
+    # Positive angle means turning counter-clockwise (like a unit circle in trig)
+    def turn(self, angle):
+        self.direction += angle
+        self.direction %= 360
+
+    # direction is found by looking at the command that was sent to the Arduino
+    # TODO make determining turn direction less prone to errors. It's a bit roundabout right now
+    def serial_turn(self, serial_byte, direction):
+        _, has_obstacle, value = parse_serial(serial_byte)
+        if direction == 'left':
+            angle = value * 3       # Arduino sends turn angle in units. 1 unit = 3 degrees
+        else:
+            angle = value * -3
+        self.turn(angle)
+        self.add_obstacle(has_obstacle)
+
+    # Sends serial message to turn the robot to face a certain direction based on the avMap
+    def set_direction(self, direction):
+        angle_needed = direction - self.direction
+        # TODO this way of dealing with the 0 -> 270 jump is horrible. At some point, I need to improve this
+        if angle_needed > 180:
+            angle_needed = -90
+        elif angle_needed < -180:
+            angle_needed = 90
+        elif angle_needed == -180:
+            angle_needed = 180
+        # if angle_needed == 90:      # turn left
+        #     go('left', value=30)
+        # elif angle_needed == -90:   # turn right
+        #     go('right', value=30)
+        # elif angle_needed == 180:   # turn right
+        #     go('right', value=60)
+
+        self.direction = direction
 
     def print_map(self):
         for y, row in enumerate(self.map):
@@ -156,6 +217,8 @@ class AVMap:
 
 
 avMap = AVMap()     # Stores the grid of the room
+mode = 'waiting'
+# Allowable modes are "waiting", "following", "distance", and "calibration"
 
 # Wait for Arduino to connect
 if serialConnected:
@@ -235,28 +298,28 @@ def calibrate():
 #       5) Plot an image of the map for debugging purposes
 #       6) Repeat 2-5 based on the roaming algorithm
 #       How do I turn saved paths (which are lines) into a "known area"?
+# TODO  Test that the Serial Messages from the Arduino are correct
 def roam_thread():
     roam_event.clear()
-    avMap.update_map((0, 1))
+    # send turn message
+    avMap.set_direction(90)
+    print(f"direction: {avMap.direction}")
+    # go('forward', 1)
+    print(avMap.serial2endpoint(b'\x01'))
+    avMap.update_map(b'\x01')
     avMap.print_map()
+    print(f"direction after move: {avMap.direction}")
+    print(f"Position after move: {avMap.currPosition}")
+    print(f"Start after move: {avMap.start}")
     print()
-    avMap.update_map((10, 1))
+    avMap.set_direction(0)
+    print(f"direction: {avMap.direction}")
+    print(avMap.serial2endpoint(b'\x0A'))
+    avMap.update_map(b'\x0A')
     avMap.print_map()
-    print()
-    avMap.update_map((10, -5), obstacle=True)
-    avMap.print_map()
-    print()
-    avMap.update_map((-3, -5), obstacle=True)
-    avMap.print_map()
-    print()
-    avMap.update_map((-3, 3), obstacle=True)
-    avMap.print_map()
-    print()
-    avMap.update_map((-4, 3), obstacle=True)
-    avMap.print_map()
-    print()
-    avMap.update_map((-4, -2), obstacle=True)
-    avMap.print_map()
+    print(f"direction after move: {avMap.direction}")
+    print(f"Position after move: {avMap.currPosition}")
+    print(f"Start after move: {avMap.start}")
     print()
     avMap.clear_map()
 
@@ -273,14 +336,20 @@ def roam_thread():
 
 # TODO Add system commands
 def change_mode(command):
+    global mode
     if command == 'distance':
         ser.write(b'\x01')
+        mode = 'distance'
     elif command == 'following':
         ser.write(b'\x02')
+        mode = 'following'
     elif command == 'calibration':
         ser.write(b'\x03')
+        mode = 'calibration'
     elif command == 'waiting':
         ser.write(b'\x00')
+        mode = 'waiting'
+
 
 # TODO add backwards
 # TODO Add following commands
@@ -288,13 +357,22 @@ def change_mode(command):
 # For distance, 1 unit = 5 cm. For turning, 1 unit = 3 degrees
 # We directly send the unit value over to the Arduino
 # Max unit value is 63 (for backward command, it's 31)
-def go(command, value=None):
+def go(command, value=0):
     if command == 'forward':
         ser.write(bytes([b'\xC0'[0] | value]))
     elif command == 'right':
         ser.write(bytes([b'\x80'[0] | value]))
     elif command == 'left':
         ser.write(bytes([b'\x40'[0] | value]))
+
+
+# TODO Not implemented for state messages yet
+def parse_serial(serial_byte):
+    message_type = 'distance' if serial_byte[0] & b'\x80'[0] == 0 else 'state'
+    has_obstacle = False if serial_byte[0] & b'\x40'[0] == 0 else True
+    value = serial_byte[0] & b'\x1F'[0]
+
+    return message_type, has_obstacle, value
 
 
 # TODO Modify the code to account for target being on the outer edges of the camera (variable speeds)
