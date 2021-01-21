@@ -270,12 +270,12 @@ int go_distance(byte unitDistance, Directions dir) {
   bool obstacle = false;
   unsigned int tick_target = (dir == forward) ? distance * cm2ticks : distance * deg2ticks;
   // Turn on the interrupt to detect encoder ticks
-  attachInterrupt(digitalPinToInterrupt(RightEncoder_pin), tickRight, CHANGE);
   attachInterrupt(digitalPinToInterrupt(LeftEncoder_pin), tickLeft, CHANGE);
   distanceTicks = 0;
+  leftTicks = 0;
   updateDir(dir);
   respondToCurrDir();
-  while (distanceTicks < tick_target) {
+  while (distanceTicks < tick_target && leftTicks < tick_target) {
     // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
     if (dir == forward && isDanger()) {
       obstacle = true;
@@ -295,7 +295,6 @@ int go_distance(byte unitDistance, Directions dir) {
   }
 
   // turn off the interrupts, so that they don't interfere with the Serial
-  detachInterrupt(digitalPinToInterrupt(RightEncoder_pin));
   detachInterrupt(digitalPinToInterrupt(LeftEncoder_pin));
 
   // Send message back to Nvidia indicating distance traveled and if obstacle was encountered
