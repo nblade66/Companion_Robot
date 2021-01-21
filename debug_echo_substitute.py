@@ -41,6 +41,8 @@ def roam():
         if threads[i].name == "following_thread":
             threads.pop(i).join()
 
+    roam_thread.start()
+
 
 def calibrate():
     driver.calibrate()
