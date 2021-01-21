@@ -4,20 +4,70 @@ import time
 from threading import Thread, Event
 from binascii import hexlify
 import camera
+import random
 
 
-# TODO function to convert string to Serial Code for better user experience
+# TODO class to simulate a serial connection if a serial connection is not available
 
 isWindowsOS = False
-serialConnected = False
 
 if isWindowsOS:
     port = 'COM5'
 else:
     port = '/dev/ttyUSB0'
 
-if serialConnected:
+
+# Class that simulates sending messages to and receiving messages from an Arduino Serial Port
+# TODO This class has not been tested yet
+class Arduino:
+    def __init__(self):
+        self.received = bytearray(b'\xFF')  # Initial value indicates "serial" is connected
+        self.in_waiting = 1
+        self.initialized = False
+
+    def write(self, byte):
+        self.received.append(byte[0])
+        self.in_waiting += 1
+
+    # TODO Not implemented for 'following' mode or backwards direction
+    # Returns a bytes object, just like how pySerial's serial.read() function returns a bytes object
+    def read(self, num_bytes):
+        self.in_waiting -= num_bytes        # For our purposes, we assume this is ALWAYS 1
+        received = self.received.pop(0)
+        if not self.initialized:
+            self.initialized = True
+            return bytes([received])
+
+        if mode == 'distance':
+            command = received & b'\xC0'[0]
+            value = received & b'\x3F'[0]
+        else:   # TODO Other Modes not implemented
+            command = None
+            value = None
+
+        # TODO return serial message from "Arduino", with randomized obstacle detection and distance truncation
+        obstacle = False
+        if random.randint(1, 10) >= 8:
+            obstacle = True
+            value = random.randrange(value)    # Distance traveled is cut short, since there was an obstacle
+
+        msg_sent = b'\x00'
+        if obstacle:
+            msg_sent = bytes([msg_sent[0] | b'\x40'[0]])
+        msg_sent = bytes([msg_sent[0] | value])
+
+        return msg_sent
+
+    def flushInput(self):
+        self.in_waiting = 0
+        self.received = bytearray()
+
+
+try:
     ser = serial.Serial(port=port, baudrate=9600, timeout=1)
+except serial.SerialException as e:
+    ser = Arduino()
+
 
 class Node:
     def __init__(self):
@@ -29,6 +79,7 @@ startNode = Node()
 startNode.is_visited = True
 
 
+# TODO I might rename this to "Robot" or something, since this class also abstracts the serial messaging controls
 class AVMap:
     def __init__(self):
         # Map should be a 2D list of Node objects; each Node represents a 5x5cm square
@@ -48,9 +99,9 @@ class AVMap:
     # The endpoint it uses in the code is the cartesian coordinate endpoint. The currPosition is in array coordinates.
     # In the function, the endpoint is adjusted to be in array coordinates by adding the array coordinates of the
     # Start point (the origin)
-    def update_map(self, serial_byte):
+    def __update_map(self, serial_byte):
         # Only implemented for Manhattan Movement for now
-        end, obstacle = self.serial2endpoint(serial_byte)
+        end, obstacle = self.__serial2endpoint(serial_byte)
         a = self.currPosition[0]
         b = self.currPosition[1]
         x = end[0] + self.start[0]
@@ -142,7 +193,7 @@ class AVMap:
 
     # All endpoints are relative to the origin coordinates (start position), so start is always in the (0,0) position
     # even if the actual array coordinates are not
-    def serial2endpoint(self, serial_byte):
+    def __serial2endpoint(self, serial_byte):
         _, has_obstacle, value = parse_serial(serial_byte)
         # I could use trig functions here, but eh, maybe later
         endpoint = (self.currPosition[0] - self.start[0], self.currPosition[1] - self.start[1])
@@ -183,14 +234,24 @@ class AVMap:
             angle_needed = 90
         elif angle_needed == -180:
             angle_needed = 180
-        # if angle_needed == 90:      # turn left
-        #     go('left', value=30)
-        # elif angle_needed == -90:   # turn right
-        #     go('right', value=30)
-        # elif angle_needed == 180:   # turn right
-        #     go('right', value=60)
+        if angle_needed == 90:      # turn left
+            go('left', value=30)
+        elif angle_needed == -90:   # turn right
+            go('right', value=30)
+        elif angle_needed == 180:   # turn right
+            go('right', value=60)
 
         self.direction = direction
+
+    # Sends a serial message to Arduino to go forward, then waits for Arduino message back
+    # TODO what if message never comes back?
+    def go(self, unit_distance):
+        go('forward', value=unit_distance)
+        while True:
+            if ser.in_waiting > 0:
+                ard_msg = ser.read(1)
+                self.__update_map(ard_msg)
+                break
 
     def print_map(self):
         for y, row in enumerate(self.map):
@@ -221,16 +282,15 @@ mode = 'waiting'
 # Allowable modes are "waiting", "following", "distance", and "calibration"
 
 # Wait for Arduino to connect
-if serialConnected:
-    while True:
-        if ser.in_waiting > 0:
-            msg = ser.read(1)
-            if msg == b'\xFF':
-                print("Arduino connected")
-                break
-    time.sleep(5)
+while True:
+    if ser.in_waiting > 0:
+        msg = ser.read(1)
+        if msg == b'\xFF':
+            print("Arduino connected")
+            break
+time.sleep(5)
 
-    ser.flushInput()
+ser.flushInput()
 
 shared_arr = [0]
 follow_event = Event()
@@ -248,16 +308,6 @@ def forward_test():
     print("Stopping")
     ser.write(b'\x10')
     time.sleep(1)
-
-def right():
-    ser.write(b'\x40')
-    ser.write(b'\x02')
-    ser.write(b'\x40')
-
-def left():
-    ser.write(b'\x80')
-    ser.write(b'\x02')
-    ser.write(b'\x80')
 
 
 def nav_test():
@@ -299,14 +349,15 @@ def calibrate():
 #       6) Repeat 2-5 based on the roaming algorithm
 #       How do I turn saved paths (which are lines) into a "known area"?
 # TODO  Test that the Serial Messages from the Arduino are correct
+# Direction of the robot is controlled by avMap.set_direction(angle)
+# Then we send call go('forward', unit_value) to make the robot go forward, and wait for Arduino message
 def roam_thread():
     roam_event.clear()
+    change_mode('distance')
     # send turn message
     avMap.set_direction(90)
     print(f"direction: {avMap.direction}")
-    # go('forward', 1)
-    print(avMap.serial2endpoint(b'\x01'))
-    avMap.update_map(b'\x01')
+    avMap.go(1)
     avMap.print_map()
     print(f"direction after move: {avMap.direction}")
     print(f"Position after move: {avMap.currPosition}")
@@ -314,8 +365,7 @@ def roam_thread():
     print()
     avMap.set_direction(0)
     print(f"direction: {avMap.direction}")
-    print(avMap.serial2endpoint(b'\x0A'))
-    avMap.update_map(b'\x0A')
+    avMap.go(10)
     avMap.print_map()
     print(f"direction after move: {avMap.direction}")
     print(f"Position after move: {avMap.currPosition}")
@@ -367,6 +417,7 @@ def go(command, value=0):
 
 
 # TODO Not implemented for state messages yet
+# parses serial received from Arduino
 def parse_serial(serial_byte):
     message_type = 'distance' if serial_byte[0] & b'\x80'[0] == 0 else 'state'
     has_obstacle = False if serial_byte[0] & b'\x40'[0] == 0 else True
