@@ -5,6 +5,8 @@ from threading import Thread
 # import facerec_from_webcam_faster as face_rec
 import time
 
+# TODO Make it easier to keep track of threads and their events
+
 threads = []
 newCommand = False
 
@@ -23,10 +25,21 @@ def right():
     None
 
 
+# TODO Before starting following thread (or distance thread), set events for all other Arduino threads
+#   and join the threads. This prevents command conflicts to the Arduino.
+#   How can I set all the events associated with a thread, though?
 def follow_me():
     follow_thread = Thread(target=driver.follow_thread, name="following_thread")
     follow_thread.start()
     threads.append(follow_thread)
+
+
+def roam():
+    roam_thread = Thread(target=driver.roam_thread(), name="roam_thread")
+    driver.follow_event.set()
+    for i in range(len(threads)):
+        if threads[i].name == "following_thread":
+            threads.pop(i).join()
 
 
 def calibrate():
@@ -56,20 +69,22 @@ if __name__ == '__main__':
                 follow_me()
             elif command == 'calibrate':
                 calibrate()
+            elif command == 'roam':
+                roam()
             elif command == 'stop following':
-                driver.event.set()
+                driver.follow_event.set()
                 for i in range(len(threads)):
                     if threads[i].name == "following_thread":
                         threads.pop(i).join()
             elif command == 'stop all':
-                driver.event.set()
+                driver.follow_event.set()
                 camera.event.set()
                 for i in range(len(threads)):
                     threads.pop().join()
                 break
 
     except (KeyboardInterrupt, Exception):
-        driver.event.set()
+        driver.follow_event.set()
         # face_rec.event.set()
         camera.event.set()
         for i in range(len(threads)):
