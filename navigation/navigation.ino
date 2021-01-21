@@ -269,6 +269,9 @@ int go_distance(byte unitDistance, Directions dir) {
   byte distance = (dir == forward) ? unitDistance * precision : unitDistance * units2deg;
   bool obstacle = false;
   unsigned int tick_target = (dir == forward) ? distance * cm2ticks : distance * deg2ticks;
+  // Turn on the interrupt to detect encoder ticks
+  attachInterrupt(digitalPinToInterrupt(RightEncoder_pin), tickRight, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(LeftEncoder_pin), tickLeft, CHANGE);
   distanceTicks = 0;
   updateDir(dir);
   respondToCurrDir();
@@ -290,6 +293,10 @@ int go_distance(byte unitDistance, Directions dir) {
       obstacle = true;
     }
   }
+
+  // turn off the interrupts, so that they don't interfere with the Serial
+  detachInterrupt(digitalPinToInterrupt(RightEncoder_pin));
+  detachInterrupt(digitalPinToInterrupt(LeftEncoder_pin));
 
   // Send message back to Nvidia indicating distance traveled and if obstacle was encountered
   byte unitsTraveled = (dir == forward) ? distanceTicks / (cm2ticks * precision) : distanceTicks / (deg2ticks * units2deg);
