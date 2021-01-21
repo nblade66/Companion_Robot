@@ -259,10 +259,12 @@ class AVMap:
     # TODO what if message never comes back?
     def go(self, unit_distance):
         go('forward', value=unit_distance)
+        print("Waiting for serial")
         while True:
             if ser.in_waiting > 0:
                 ard_msg = ser.read(1)
                 self.__update_map(ard_msg)
+                print("Received Serial")
                 break
 
     def print_map(self):
@@ -387,9 +389,11 @@ def roam_thread():
 
 
 def test_mapping():
+    print("Testing Mapping")
     roam_event.clear()
     change_mode('distance')
     while True:
+        print("Input Command")
         command, value = input().split(' ')
         value = int(value)
         print(f"direction before move: {avMap.direction}")
