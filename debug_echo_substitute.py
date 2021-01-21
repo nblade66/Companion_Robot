@@ -45,6 +45,17 @@ def roam():
     roam_thread.start()
 
 
+def test_roam():
+    test_roam_thread = Thread(target=driver.test_mapping, name="roam_thread")
+    driver.follow_event.set()
+    for i in range(len(threads)):
+        if threads[i].name == "following_thread":
+            threads.pop(i).join()
+
+    threads.append(test_roam_thread)
+    test_roam_thread.start()
+
+
 def calibrate():
     driver.calibrate()
 
@@ -76,6 +87,8 @@ if __name__ == '__main__':
                 calibrate()
             elif command == 'roam':
                 roam()
+            elif command == 'test mapping':
+                test_roam()
             elif command == 'stop following':
                 driver.follow_event.set()
                 for i in range(len(threads)):
@@ -83,6 +96,7 @@ if __name__ == '__main__':
                         threads.pop(i).join()
             elif command == 'stop all':
                 driver.follow_event.set()
+                driver.roam_event.set()
                 camera.event.set()
                 for i in range(len(threads)):
                     threads.pop().join()

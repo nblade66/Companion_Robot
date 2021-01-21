@@ -369,7 +369,7 @@ def roam_thread():
     # send turn message
     avMap.set_direction(90)
     print(f"direction: {avMap.direction}")
-    avMap.go(1)
+    avMap.go(20)
     avMap.print_map()
     print(f"direction after move: {avMap.direction}")
     print(f"Position after move: {avMap.currPosition}")
@@ -377,13 +377,34 @@ def roam_thread():
     print()
     avMap.set_direction(0)
     print(f"direction: {avMap.direction}")
-    avMap.go(10)
+    avMap.go(30)
     avMap.print_map()
     print(f"direction after move: {avMap.direction}")
     print(f"Position after move: {avMap.currPosition}")
     print(f"Start after move: {avMap.start}")
     print()
     avMap.clear_map()
+
+
+def test_mapping():
+    roam_event.clear()
+    change_mode('distance')
+    while True:
+        command, value = input().split(' ')
+        value = int(value)
+        print(f"direction before move: {avMap.direction}")
+        if command == 'go':
+            print(f"Going forward {value} units...")
+            avMap.go(value)
+        elif command == 'face':
+            print(f"Turning to face {value} degrees...")
+            avMap.set_direction(value)
+        avMap.print_map()
+        print(f"direction after move: {avMap.direction}")
+        print(f"Position after move: {avMap.currPosition}")
+        print(f"Start after move: {avMap.start}")
+        print()
+
 
 
 
