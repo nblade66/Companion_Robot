@@ -88,7 +88,7 @@ if __name__ == '__main__':
             elif command == 'roam':
                 roam()
             elif command == 'test mapping':
-                test_roam()
+                break
             elif command == 'stop following':
                 driver.follow_event.set()
                 for i in range(len(threads)):
@@ -101,6 +101,7 @@ if __name__ == '__main__':
                 for i in range(len(threads)):
                     threads.pop().join()
                 break
+        driver.test_mapping()
 
     except (KeyboardInterrupt, Exception):
         driver.follow_event.set()
