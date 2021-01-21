@@ -295,6 +295,8 @@ int go_distance(byte unitDistance, Directions dir) {
   byte unitsTraveled = (dir == forward) ? distanceTicks / (cm2ticks * precision) : distanceTicks / (deg2ticks * units2deg);
   byte msg = generateDistSerial(obstacle, unitsTraveled);
 
+  Serial.write(msg)
+
   return unitsTraveled;
 
 
