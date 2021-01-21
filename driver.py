@@ -26,8 +26,9 @@ class Arduino:
         self.initialized = False
 
     def write(self, byte):
-        self.received.append(byte[0])
-        self.in_waiting += 1
+        if mode == 'distance':
+            self.received.append(byte[0])
+            self.in_waiting += 1
 
     # TODO Not implemented for 'following' mode or backwards direction
     # Returns a bytes object, just like how pySerial's serial.read() function returns a bytes object
@@ -55,6 +56,7 @@ class Arduino:
         if obstacle:
             msg_sent = bytes([msg_sent[0] | b'\x40'[0]])
         msg_sent = bytes([msg_sent[0] | value])
+        print(f"message sent from sim: {hexlify(msg_sent)}")
 
         return msg_sent
 
@@ -225,6 +227,8 @@ class AVMap:
         self.add_obstacle(has_obstacle)
 
     # Sends serial message to turn the robot to face a certain direction based on the avMap
+    # TODO  Modify this function to change angle based on the returned Arduino message (only after implementing
+    #   actual angle directions instead of just Manhattan navigation, i.e. only right angles)
     def set_direction(self, direction):
         angle_needed = direction - self.direction
         # TODO this way of dealing with the 0 -> 270 jump is horrible. At some point, I need to improve this
@@ -241,7 +245,15 @@ class AVMap:
         elif angle_needed == 180:   # turn right
             go('right', value=60)
 
+        # TODO wait for serial message to come back
+        while True:
+            if ser.in_waiting > 0:
+                ard_msg = ser.read(1)
+                _, obstacle, _ = parse_serial(ard_msg)
+                break
+
         self.direction = direction
+        self.add_obstacle(obstacle)
 
     # Sends a serial message to Arduino to go forward, then waits for Arduino message back
     # TODO what if message never comes back?
