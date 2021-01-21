@@ -35,12 +35,13 @@ def follow_me():
 
 
 def roam():
-    roam_thread = Thread(target=driver.roam_thread(), name="roam_thread")
+    roam_thread = Thread(target=driver.roam_thread, name="roam_thread")
     driver.follow_event.set()
     for i in range(len(threads)):
         if threads[i].name == "following_thread":
             threads.pop(i).join()
 
+    threads.append(roam_thread)
     roam_thread.start()
 
 
@@ -54,12 +55,9 @@ def dance():
 
 if __name__ == '__main__':
     print("starting...")
-    cam_thread = Thread(target=camera.camera_thread)
     # face_rec_thread = Thread(target=face_rec.facerec_thread)
     # face_rec_thread.start()
     # threads.append(face_rec_thread)
-    cam_thread.start()
-    threads.append(cam_thread)
     # forward()
     # driver.forward()
 
@@ -69,6 +67,11 @@ if __name__ == '__main__':
             time.sleep(1)
             if command == 'follow':
                 follow_me()
+            if command == 'cameras':
+                cam_thread = Thread(target=camera.camera_thread)
+                cam_thread.start()
+                threads.append(cam_thread)
+
             elif command == 'calibrate':
                 calibrate()
             elif command == 'roam':
@@ -87,6 +90,7 @@ if __name__ == '__main__':
 
     except (KeyboardInterrupt, Exception):
         driver.follow_event.set()
+        driver.roam_event.set()
         # face_rec.event.set()
         camera.event.set()
         for i in range(len(threads)):
