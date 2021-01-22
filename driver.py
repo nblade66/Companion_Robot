@@ -3,7 +3,7 @@ import serial
 import time
 from threading import Thread, Event
 from binascii import hexlify
-import camera
+# import camera
 import random
 
 
@@ -48,7 +48,7 @@ class Arduino:
 
         # TODO return serial message from "Arduino", with randomized obstacle detection and distance truncation
         obstacle = False
-        if random.randint(1, 10) >= 8:
+        if random.randint(1, 10) >= 5:
             obstacle = True
             value = random.randrange(value)    # Distance traveled is cut short, since there was an obstacle
 
@@ -245,7 +245,7 @@ class AVMap:
             else:
                 turn = 'left'
 
-        go(turn, angle_needed / 3)      # We divide by 3 since 1 unit = 3 degrees, and messages are sent in units
+        go(turn, angle_needed // 3)      # We divide by 3 since 1 unit = 3 degrees, and messages are sent in units
 
         # TODO wait for serial message to come back
         print("Waiting for serial...")
