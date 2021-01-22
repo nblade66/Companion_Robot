@@ -237,7 +237,7 @@ void processCommand(byte command) {
         case 1: //left
           commandValue = command & B00111111;
           go_distance(commandValue, left);
-          
+
 
 
           break;
@@ -275,14 +275,22 @@ int go_distance(byte unitDistance, Directions dir) {
   leftTicks = 0;
   updateDir(dir);
   respondToCurrDir();
-  while (distanceTicks < tick_target && leftTicks < tick_target) {
-    // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
-    if (dir == forward && isDanger()) {
-      obstacle = true;
-      break;
+  if (dir == forward) {
+    while (distanceTicks < tick_target && leftTicks < tick_target) {
+      // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
+      if (dir == forward && isDanger()) {
+        obstacle = true;
+        break;
+      }
+
+      // break if the distanceTicks stops updating (this means something is wrong)
     }
-    
-    // break if the distanceTicks stops updating (this means something is wrong)
+  } else if (dir == left || dir == right) {
+    updateDir(left);
+    respondToCurrDir();
+    delay(10000);
+    updateDir(halt);
+    respondToCurrDir();
   }
   updateDir(halt);
   respondToCurrDir();
