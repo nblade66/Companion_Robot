@@ -1,6 +1,6 @@
 # This script is used in place of the Amazon Echo for quicker testing
 import driver
-import camera
+# import camera
 from threading import Thread
 # import facerec_from_webcam_faster as face_rec
 import time
@@ -78,10 +78,10 @@ if __name__ == '__main__':
             time.sleep(1)
             if command == 'follow':
                 follow_me()
-            if command == 'cameras':
-                cam_thread = Thread(target=camera.camera_thread)
-                cam_thread.start()
-                threads.append(cam_thread)
+            # elif command == 'cameras':
+            #     cam_thread = Thread(target=camera.camera_thread)
+            #     cam_thread.start()
+            #     threads.append(cam_thread)
 
             elif command == 'calibrate':
                 calibrate()
@@ -97,7 +97,7 @@ if __name__ == '__main__':
             elif command == 'stop all':
                 driver.follow_event.set()
                 driver.roam_event.set()
-                camera.event.set()
+                # camera.event.set()
                 for i in range(len(threads)):
                     threads.pop().join()
                 break
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         driver.follow_event.set()
         driver.roam_event.set()
         # face_rec.event.set()
-        camera.event.set()
+        # camera.event.set()
         for i in range(len(threads)):
             threads.pop().join()
 
