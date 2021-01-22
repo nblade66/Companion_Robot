@@ -229,6 +229,7 @@ class AVMap:
     # Sends serial message to turn the robot to face a certain direction based on the avMap
     # TODO  Modify this function to change angle based on the returned Arduino message (only after implementing
     #   actual angle directions instead of just Manhattan navigation, i.e. only right angles)
+    # TODO  Add safety code in case user inputs wrong value (otherwise it is stuck in infinite loop)
     def set_direction(self, direction):
         angle_needed = direction - self.direction
         # TODO this way of dealing with the 0 -> 270 jump is horrible. At some point, I need to improve this
@@ -239,17 +240,22 @@ class AVMap:
         elif angle_needed == -180:
             angle_needed = 180
         if angle_needed == 90:      # turn left
+            print("Turning left by 90 degrees...")
             go('left', value=30)
         elif angle_needed == -90:   # turn right
+            print("Turning right by 90 degrees...")
             go('right', value=30)
         elif angle_needed == 180:   # turn right
+            print("Turning right by 180 degrees...")
             go('right', value=60)
 
         # TODO wait for serial message to come back
+        print("Waiting for serial...")
         while True:
             if ser.in_waiting > 0:
                 ard_msg = ser.read(1)
                 _, obstacle, _ = parse_serial(ard_msg)
+                print(f"Message from Arduino: {hexlify(ard_msg)}")
                 break
 
         self.direction = direction
@@ -259,12 +265,12 @@ class AVMap:
     # TODO what if message never comes back?
     def go(self, unit_distance):
         go('forward', value=unit_distance)
-        print("Waiting for serial")
+        print("Moving Forward, waiting for serial...")
         while True:
             if ser.in_waiting > 0:
                 ard_msg = ser.read(1)
                 self.__update_map(ard_msg)
-                print("Received Serial")
+                print(f"Message from Arduino: {hexlify(ard_msg)}")
                 break
 
     def print_map(self):
@@ -350,8 +356,7 @@ def calibrate():
     while True:
         if ser.in_waiting > 0:
             msg = ser.read(1)
-            print("Message from Arduino")
-            print(hexlify(msg))
+            print(f"Message from Arduino: {hexlify(msg)}")
             break
 
 
@@ -393,7 +398,7 @@ def test_mapping():
     roam_event.clear()
     change_mode('distance')
     while True:
-        print("Input Command")
+        print("Please Input Command...")
         command, value = input().split(' ')
         value = int(value)
         print(f"direction before move: {avMap.direction}")
@@ -403,6 +408,9 @@ def test_mapping():
         elif command == 'face':
             print(f"Turning to face {value} degrees...")
             avMap.set_direction(value)
+        elif command == 'turn':
+            print(f"Testing turn functionality with value: {value}...")
+            ser.write(bytes([value]))
         avMap.print_map()
         print(f"direction after move: {avMap.direction}")
         print(f"Position after move: {avMap.currPosition}")
@@ -446,11 +454,15 @@ def change_mode(command):
 # Max unit value is 63 (for backward command, it's 31)
 def go(command, value=0):
     if command == 'forward':
-        ser.write(bytes([b'\xC0'[0] | value]))
+        ser_msg = bytes([b'\xC0'[0] | value])
     elif command == 'right':
-        ser.write(bytes([b'\x80'[0] | value]))
+        ser_msg = bytes([b'\x80'[0] | value])
     elif command == 'left':
-        ser.write(bytes([b'\x40'[0] | value]))
+        ser_msg = bytes([b'\x40'[0] | value])
+    else:
+        ser_msg = b'\x00'
+    print(f"Message to Arduino: {ser_msg}")
+    ser.write(ser_msg)
 
 
 # TODO Not implemented for state messages yet
