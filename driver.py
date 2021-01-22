@@ -231,23 +231,21 @@ class AVMap:
     #   actual angle directions instead of just Manhattan navigation, i.e. only right angles)
     # TODO  Add safety code in case user inputs wrong value (otherwise it is stuck in infinite loop)
     def set_direction(self, direction):
-        angle_needed = direction - self.direction
-        # TODO this way of dealing with the 0 -> 270 jump is horrible. At some point, I need to improve this
-        if angle_needed > 180:
-            angle_needed = -90
-        elif angle_needed < -180:
-            angle_needed = 90
-        elif angle_needed == -180:
-            angle_needed = 180
-        if angle_needed == 90:      # turn left
-            print("Turning left by 90 degrees...")
-            go('left', value=30)
-        elif angle_needed == -90:   # turn right
-            print("Turning right by 90 degrees...")
-            go('right', value=30)
-        elif angle_needed == 180:   # turn right
-            print("Turning right by 180 degrees...")
-            go('right', value=60)
+        source = self.direction
+        dest = direction
+        angle_needed = 180 - abs(abs(source - dest) - 180)
+        if source < dest:
+            if dest - source < 180:
+                turn = 'left'
+            else:
+                turn = 'right'
+        else:
+            if source - dest < 180:
+                turn = 'right'
+            else:
+                turn = 'left'
+
+        go(turn, angle_needed / 3)      # We divide by 3 since 1 unit = 3 degrees, and messages are sent in units
 
         # TODO wait for serial message to come back
         print("Waiting for serial...")
