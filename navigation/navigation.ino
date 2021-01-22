@@ -33,7 +33,7 @@ Ultrasound rightUltrasound  (right_echo_pin, right_trig_pin);
 
 //constants
 const int default_PWM = 32;
-int right_PWM = default_PWM - 3; //adjustment for initial PWM; proportional control makes this value irrelevant later on
+int right_PWM = default_PWM - 9; //adjustment for initial PWM; proportional control makes this value irrelevant later on
 int left_PWM = default_PWM;
 const int STOP_DISTANCE_CENTER = 20; // cm
 const int STOP_DISTANCE_SIDE   = 25; // cm
@@ -66,7 +66,7 @@ unsigned int distanceTicks = 0;
 int precision = 5; // in centimeters; DO NOT CHANGE FOR NOW, Serial Messaging to include precision is not implemented
 const int cm2ticks = 80;
 const int units2deg = 3;
-const int deg2ticks = 21; // TODO needs calibration
+const int deg2ticks = 22; // TODO needs calibration
 
 // Variables for Commands
 int q_size = 31;
@@ -84,6 +84,21 @@ void setup() {
   set_speed(right_PWM, left_PWM);
   delay(500);
 }
+
+bool once = true;
+bool calibrate = true;
+
+//void loop() {
+//
+//  if (once) {
+//    once = false;
+//    delay(1000);
+//    go_distance(60, right);
+//    delay(1000);
+//    go_distance(60, left);
+//
+//  }
+//}
 
 void loop() {
   // Accept a Command from Serial
@@ -272,26 +287,19 @@ int go_distance(byte unitDistance, Directions dir) {
   // Turn on the interrupt to detect encoder ticks
   attachInterrupt(digitalPinToInterrupt(LeftEncoder_pin), tickLeft, CHANGE);
   distanceTicks = 0;
-  leftTicks = 0;
   updateDir(dir);
   respondToCurrDir();
-  if (dir == forward) {
-    while (distanceTicks < tick_target && leftTicks < tick_target) {
-      // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
-      if (dir == forward && isDanger()) {
-        obstacle = true;
-        break;
-      }
 
-      // break if the distanceTicks stops updating (this means something is wrong)
+  while (distanceTicks < tick_target) {
+    // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
+    if (dir == forward && isDanger()) {
+      obstacle = true;
+      break;
     }
-  } else if (dir == left || dir == right) {
-    updateDir(left);
-    respondToCurrDir();
-    delay(10000);
-    updateDir(halt);
-    respondToCurrDir();
+
+    // break if the distanceTicks stops updating (this means something is wrong)
   }
+
   updateDir(halt);
   respondToCurrDir();
 
