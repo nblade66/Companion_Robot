@@ -80,7 +80,8 @@ void setup() {
     ; // wait for serial to connect
   }
   Serial.write(B11111111);
-  go_stop(); // Guarantee that both motors are not moving at start
+  updateDir(halt); // Guarantee that both motors are not moving at start
+  respondToCurrDir();
   set_speed(right_PWM, left_PWM);
   delay(500);
 }
@@ -304,10 +305,8 @@ int go_distance(byte unitDistance, Directions dir) {
   respondToCurrDir();
 
   // Check for danger at the end of the maneuver when turning
-  if (dir == left || dir == right) {
-    if (isDanger()) {
-      obstacle = true;
-    }
+  if (isDanger()) {
+    obstacle = true;
   }
 
   // turn off the interrupts, so that they don't interfere with the Serial
