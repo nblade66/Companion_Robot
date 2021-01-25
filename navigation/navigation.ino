@@ -66,7 +66,7 @@ unsigned int distanceTicks = 0;
 int precision = 5; // in centimeters; DO NOT CHANGE FOR NOW, Serial Messaging to include precision is not implemented
 const int cm2ticks = 80;
 const int units2deg = 3;
-const int deg2ticks = 22; // TODO needs calibration
+const int deg2ticks = 21; // TODO needs calibration
 
 // Variables for Commands
 int q_size = 31;
@@ -86,8 +86,8 @@ void setup() {
   delay(500);
 }
 
-bool once = true;
-bool calibrate = true;
+//bool once = true;
+//bool calibrate = true;
 
 //void loop() {
 //
@@ -292,6 +292,7 @@ int go_distance(byte unitDistance, Directions dir) {
   respondToCurrDir();
 
   while (distanceTicks < tick_target) {
+    Serial.flush();
     // Keeps going forward until distance is reached or ultrasonic sensor detects obstacle
     if (dir == forward && isDanger()) {
       obstacle = true;
