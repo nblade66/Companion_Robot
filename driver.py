@@ -75,6 +75,8 @@ class Node:
     def __init__(self):
         self.is_visited = False
         self.is_obstacle = False
+        self.prev = None        # Used for Dijkstra's algorithm
+        self.distance = None
 
 
 startNode = Node()
@@ -270,6 +272,28 @@ class AVMap:
                 self.__update_map(ard_msg)
                 print(f"Message from Arduino: {hexlify(ard_msg)}")
                 break
+
+    # Returns a list of (cartesian) coordinates to travel to in straight lines
+    # TODO Account for when desired endpoint is outside of the current avMap
+    def dijkstra(self, endpoint):
+        visited = []
+        to_visit = [self.currPosition]
+
+        # TODO Convert from cartesian endpoint to array coordinate endpoint
+        endpoint = self.cart2arr(endpoint)
+        # TODO Pop vertex, v, with smallest distance value in "to_visit" array and add to "visited" array
+        # TODO Update distance values of vertices adjacent to "to_visit" array
+        # TODO Update previous values of vertices
+
+    def cart2arr(self, point):
+        return point[0] + self.start[0], point[1] + self.start[1]
+
+    def arr2cart(self, point):
+        return point[0] - self.start[0], point[1] - self.start[1]
+
+    @staticmethod
+    def distance(start, end):
+        return 1
 
     def print_map(self):
         for y, row in enumerate(self.map):
