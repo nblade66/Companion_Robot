@@ -14,7 +14,7 @@ idna==2.10
 imutils==0.5.3
 iso8601==0.1.12
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 MarkupSafe==1.1.1
 numpy==1.19.1
 opencv-python==4.4.0.42
